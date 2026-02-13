@@ -1,0 +1,349 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DISC 검사 - 강사 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 300px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app" class="max-w-md mx-auto pb-20">
+        <!-- 강사 대시보드 -->
+        <div id="instructorScreen" class="screen">
+            <div class="bg-gradient-to-br from-purple-500 to-indigo-600 text-white p-6 rounded-b-3xl shadow-lg mb-6">
+                <h2 class="text-2xl font-bold mb-2">강사 대시보드</h2>
+                <p class="opacity-90">팀 분석 및 관리</p>
+            </div>
+            
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">팀 선택</label>
+                    <select id="teamSelect" onchange="loadTeamAnalysis()" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <option value="">팀을 선택하세요</option>
+                    </select>
+                </div>
+                
+                <div id="teamAnalysis" class="hidden">
+                    <!-- 팀 분석 결과가 여기에 표시됩니다 -->
+                </div>
+                
+                <a href="index.html" 
+                    class="block w-full bg-gray-600 text-white py-3 rounded-lg font-medium mt-4 text-center hover:bg-gray-700">
+                    검사 화면으로
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/disc-data.js"></script>
+    <script>
+    // ============================================================================
+    // LocalStorage 데이터 관리
+    // ============================================================================
+    function getFromLocalStorage(key) {
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : null;
+    }
+
+    function getAllTeams() {
+        return getFromLocalStorage('disc_teams') || [];
+    }
+
+    function getAllMembers() {
+        return getFromLocalStorage('disc_members') || [];
+    }
+
+    function getMembersByTeamId(teamId) {
+        const members = getAllMembers();
+        return members.filter(m => m.team_id === teamId);
+    }
+
+    // ============================================================================
+    // 강사 대시보드 로직
+    // ============================================================================
+    function loadInstructorDashboard() {
+        const teams = getAllTeams();
+        const teamSelect = document.getElementById('teamSelect');
+        teamSelect.innerHTML = '<option value="">팀을 선택하세요</option>';
+        
+        teams.forEach(team => {
+            const option = document.createElement('option');
+            option.value = team.id;
+            option.textContent = team.team_name;
+            teamSelect.appendChild(option);
+        });
+    }
+
+    function loadTeamAnalysis() {
+        const teamId = document.getElementById('teamSelect').value;
+        
+        if (!teamId) {
+            document.getElementById('teamAnalysis').classList.add('hidden');
+            return;
+        }
+        
+        const members = getMembersByTeamId(teamId);
+        
+        if (members.length === 0) {
+            document.getElementById('teamAnalysis').innerHTML = `
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                    <p class="text-yellow-800">아직 검사를 완료한 팀원이 없습니다.</p>
+                </div>
+            `;
+            document.getElementById('teamAnalysis').classList.remove('hidden');
+            return;
+        }
+        
+        const analysis = analyzeTeam(members);
+        renderTeamAnalysis(members, analysis);
+    }
+
+    function renderTeamAnalysis(members, analysis) {
+        const container = document.getElementById('teamAnalysis');
+        
+        const membersHtml = members.map(m => {
+            const color = discProfiles[m.main_type].color;
+            return `
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span class="font-medium">${m.member_name}</span>
+                    <span class="px-3 py-1 rounded-full text-sm text-white" style="background-color: ${color}">
+                        ${m.main_type}
+                    </span>
+                </div>
+            `;
+        }).join('');
+        
+        const quadrantData = members.map(m => ({
+            name: m.member_name,
+            type: m.main_type,
+            x: (m.d_score - m.s_score) / 2,
+            y: (m.i_score - m.c_score) / 2
+        }));
+        
+        container.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold mb-4">팀원 목록 (${members.length}명)</h3>
+                <div class="space-y-2">
+                    ${membersHtml}
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold mb-4">팀 DISC 분포</h3>
+                <div class="chart-container">
+                    <canvas id="teamChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold mb-4 text-center">4분면 분포도</h3>
+                <div class="relative">
+                    <!-- 상단 레이블 -->
+                    <div class="text-center text-sm font-medium text-gray-700 mb-2">
+                        외향적 (I)
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <!-- 좌측 레이블 -->
+                        <div class="text-sm font-medium text-gray-700 mr-3" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                            관계지향 (S)
+                        </div>
+                        
+                        <!-- 차트 영역 -->
+                        <div class="flex-1 bg-gray-50 rounded-lg p-4" style="height: 350px;">
+                            <canvas id="quadrantChart"></canvas>
+                        </div>
+                        
+                        <!-- 우측 레이블 -->
+                        <div class="text-sm font-medium text-gray-700 ml-3" style="writing-mode: vertical-rl;">
+                            과업지향 (D)
+                        </div>
+                    </div>
+                    
+                    <!-- 하단 레이블 -->
+                    <div class="text-center text-sm font-medium text-gray-700 mt-2">
+                        내향적 (C)
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold mb-3 text-green-600">💪 팀 강점</h3>
+                <p class="text-gray-700 leading-relaxed">${analysis.strengths}</p>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold mb-3 text-orange-600">⚠️ 팀 약점</h3>
+                <p class="text-gray-700 leading-relaxed">${analysis.weaknesses}</p>
+            </div>
+            
+            <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold mb-3 text-purple-600">📊 팀 분석</h3>
+                ${analysis.summary.map((line, idx) => 
+                    `<p class="text-gray-700 leading-relaxed mb-2">${idx + 1}. ${line}</p>`
+                ).join('')}
+            </div>
+        `;
+        
+        container.classList.remove('hidden');
+        
+        const percentages = calculatePercentages(analysis.avgScores);
+        const ctx1 = document.getElementById('teamChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'doughnut',
+            data: {
+                labels: ['D (주도형)', 'I (사교형)', 'S (안정형)', 'C (신중형)'],
+                datasets: [{
+                    data: [percentages.D, percentages.I, percentages.S, percentages.C],
+                    backgroundColor: ['#EF4444', '#EAB308', '#10B981', '#3B82F6'],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + context.parsed + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        const ctx2 = document.getElementById('quadrantChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'D (주도형)',
+                    data: quadrantData.filter(d => d.type === 'D').map(d => ({x: d.x, y: d.y, label: d.name})),
+                    backgroundColor: '#EF4444',
+                    pointRadius: 8
+                }, {
+                    label: 'I (사교형)',
+                    data: quadrantData.filter(d => d.type === 'I').map(d => ({x: d.x, y: d.y, label: d.name})),
+                    backgroundColor: '#EAB308',
+                    pointRadius: 8
+                }, {
+                    label: 'S (안정형)',
+                    data: quadrantData.filter(d => d.type === 'S').map(d => ({x: d.x, y: d.y, label: d.name})),
+                    backgroundColor: '#10B981',
+                    pointRadius: 8
+                }, {
+                    label: 'C (신중형)',
+                    data: quadrantData.filter(d => d.type === 'C').map(d => ({x: d.x, y: d.y, label: d.name})),
+                    backgroundColor: '#3B82F6',
+                    pointRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -30,
+                        max: 30,
+                        title: {
+                            display: false
+                        },
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 0) {
+                                    return '#9CA3AF';
+                                }
+                                return '#E5E7EB';
+                            },
+                            lineWidth: function(context) {
+                                if (context.tick.value === 0) {
+                                    return 2;
+                                }
+                                return 1;
+                            }
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'center',
+                        min: -30,
+                        max: 30,
+                        title: {
+                            display: false
+                        },
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 0) {
+                                    return '#9CA3AF';
+                                }
+                                return '#E5E7EB';
+                            },
+                            lineWidth: function(context) {
+                                if (context.tick.value === 0) {
+                                    return 2;
+                                }
+                                return 1;
+                            }
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: { size: 11 },
+                            padding: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.raw.label || context.dataset.label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 초기 로드
+    document.addEventListener('DOMContentLoaded', function() {
+        loadInstructorDashboard();
+    });
+    </script>
+</body>
+</html>

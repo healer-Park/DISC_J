@@ -1,0 +1,514 @@
+﻿   1	<!DOCTYPE html>
+     2	<html lang="ko">
+     3	<head>
+     4	    <meta charset="UTF-8">
+     5	    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+     6	    <meta name="description" content="팀 워크숍 DISC 행동 유형 검사 - 브라우저 로컬에만 저장되는 안전한 심리검사 도구">
+     7	    <meta name="author" content="Team Workshop">
+     8	    <title>팀 워크숍 DISC 행동 유형 검사</title>
+     9	    <script src="https://cdn.tailwindcss.com"></script>
+    10	    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    11	    <style>
+    12	        .disc-title .team { color: #3B82F6; }
+    13	        .disc-title .d { color: #EF4444; }
+    14	        .disc-title .i { color: #EAB308; }
+    15	        .disc-title .s { color: #10B981; }
+    16	        .disc-title .c { color: #3B82F6; }
+    17	        
+    18	        .option-card {
+    19	            transition: all 0.3s ease;
+    20	            border: 2px solid transparent;
+    21	        }
+    22	        
+    23	        .option-card.selected-most {
+    24	            border-color: #10B981;
+    25	            background-color: #D1FAE5;
+    26	        }
+    27	        
+    28	        .option-card.selected-least {
+    29	            border-color: #EF4444;
+    30	            background-color: #FEE2E2;
+    31	        }
+    32	        
+    33	        .option-card:active {
+    34	            transform: scale(0.98);
+    35	        }
+    36	        
+    37	        body {
+    38	            touch-action: manipulation;
+    39	            -webkit-tap-highlight-color: transparent;
+    40	        }
+    41	        
+    42	        .chart-container {
+    43	            position: relative;
+    44	            height: 300px;
+    45	            width: 300px;
+    46	            margin: 0 auto;
+    47	        }
+    48	    </style>
+    49	</head>
+    50	<body class="bg-gray-50 min-h-screen">
+    51	    <!-- 개인정보 안내 배너 -->
+    52	    <div class="bg-blue-50 border-b border-blue-200 py-2 px-4 text-center text-sm text-blue-800">
+    53	        🔒 <strong>안전한 검사:</strong> 모든 데이터는 귀하의 브라우저에만 저장되며, 외부로 전송되지 않습니다.
+    54	    </div>
+    55	
+    56	    <div id="app" class="max-w-md mx-auto pb-20">
+    57	        <!-- 홈 화면 -->
+    58	        <div id="homeScreen" class="screen">
+    59	            <div class="bg-white shadow-lg rounded-b-3xl p-6 mb-6">
+    60	                <h1 class="text-2xl font-bold text-center mb-2 disc-title">
+    61	                    <span class="team">팀워크숍</span> <span class="d">D</span><span class="i">I</span><span class="s">S</span><span class="c">C</span><br>행동 유형 검사
+    62	                </h1>
+    63	                <p class="text-gray-600 text-center text-sm">나와 우리 팀을 이해하는 시간</p>
+    64	            </div>
+    65	            
+    66	            <div class="p-6">
+    67	                <div class="bg-white rounded-2xl shadow-md p-6 mb-6">
+    68	                    <h2 class="text-lg font-bold mb-4 text-gray-800">검사 시작하기</h2>
+    69	                    
+    70	                    <div class="mb-4">
+    71	                        <label class="block text-sm font-medium text-gray-700 mb-2">팀 이름</label>
+    72	                        <input type="text" id="teamName" autocomplete="off"
+    73	                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    74	                            placeholder="예) 마케팅팀">
+    75	                    </div>
+    76	                    
+    77	                    <div class="mb-6">
+    78	                        <label class="block text-sm font-medium text-gray-700 mb-2">팀원 이름</label>
+    79	                        <input type="text" id="memberName" autocomplete="off"
+    80	                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    81	                            placeholder="예) 홍길동">
+    82	                    </div>
+    83	                    
+    84	                    <button onclick="startTest()" 
+    85	                        class="w-full bg-blue-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-blue-700 active:bg-blue-800">
+    86	                        검사 시작
+    87	                    </button>
+    88	                </div>
+    89	            </div>
+    90	        </div>
+    91	
+    92	        <!-- 검사 화면 -->
+    93	        <div id="testScreen" class="screen hidden">
+    94	            <div class="bg-white shadow-lg p-4 sticky top-0 z-10">
+    95	                <div class="flex justify-between items-center mb-2">
+    96	                    <h2 class="text-lg font-bold">DISC 검사</h2>
+    97	                    <span class="text-sm text-gray-600"><span id="currentPage">1</span> / 7</span>
+    98	                </div>
+    99	                <div class="w-full bg-gray-200 rounded-full h-2">
+   100	                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 14.28%"></div>
+   101	                </div>
+   102	            </div>
+   103	            
+   104	            <div id="questionContainer" class="p-6"></div>
+   105	            
+   106	            <div class="fixed bottom-0 left-0 right-0 bg-white shadow-lg p-4 max-w-md mx-auto">
+   107	                <div class="flex gap-3">
+   108	                    <button onclick="prevPage()" id="prevBtn"
+   109	                        class="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-medium disabled:opacity-50">
+   110	                        이전
+   111	                    </button>
+   112	                    <button onclick="nextPage()" id="nextBtn"
+   113	                        class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium disabled:opacity-50">
+   114	                        다음
+   115	                    </button>
+   116	                </div>
+   117	            </div>
+   118	        </div>
+   119	
+   120	        <!-- 결과 화면 -->
+   121	        <div id="resultScreen" class="screen hidden">
+   122	            <div class="bg-gradient-to-br from-blue-500 to-purple-600 text-white p-6 rounded-b-3xl shadow-lg mb-6">
+   123	                <h2 class="text-2xl font-bold text-center mb-2">검사 완료!</h2>
+   124	                <p class="text-center opacity-90" id="resultMemberName"></p>
+   125	            </div>
+   126	            
+   127	            <div class="p-6">
+   128	                <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+   129	                    <h3 class="text-lg font-bold mb-4 text-center">나의 DISC 유형</h3>
+   130	                    <div class="chart-container">
+   131	                        <canvas id="resultChart"></canvas>
+   132	                    </div>
+   133	                    <div class="mt-4 text-center">
+   134	                        <div class="text-2xl font-bold mb-1" id="mainType"></div>
+   135	                        <div class="text-gray-600" id="subType"></div>
+   136	                    </div>
+   137	                </div>
+   138	                
+   139	                <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+   140	                    <h3 class="text-lg font-bold mb-3 text-green-600">💪 강점</h3>
+   141	                    <p class="text-gray-700 leading-relaxed" id="strengths"></p>
+   142	                </div>
+   143	                
+   144	                <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+   145	                    <h3 class="text-lg font-bold mb-3 text-orange-600">⚠️ 약점</h3>
+   146	                    <p class="text-gray-700 leading-relaxed" id="weaknesses"></p>
+   147	                </div>
+   148	                
+   149	                <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+   150	                    <h3 class="text-lg font-bold mb-3 text-red-600">😰 스트레스 요인</h3>
+   151	                    <div class="text-gray-700 leading-relaxed" id="stressors"></div>
+   152	                </div>
+   153	                
+   154	                <button onclick="goHome()" 
+   155	                    class="w-full bg-blue-600 text-white py-4 rounded-lg font-bold text-lg">
+   156	                    처음으로
+   157	                </button>
+   158	            </div>
+   159	        </div>
+   160	    </div>
+   161	
+   162	    <script src="js/disc-data.js"></script>
+   163	    <script>
+   164	    // ============================================================================
+   165	    // LocalStorage 데이터 관리
+   166	    // ============================================================================
+   167	    function saveToLocalStorage(key, data) {
+   168	        localStorage.setItem(key, JSON.stringify(data));
+   169	    }
+   170	
+   171	    function getFromLocalStorage(key) {
+   172	        const data = localStorage.getItem(key);
+   173	        return data ? JSON.parse(data) : null;
+   174	    }
+   175	
+   176	    function getAllTeams() {
+   177	        return getFromLocalStorage('disc_teams') || [];
+   178	    }
+   179	
+   180	    function getAllMembers() {
+   181	        return getFromLocalStorage('disc_members') || [];
+   182	    }
+   183	
+   184	    function saveTeam(teamName) {
+   185	        const teams = getAllTeams();
+   186	        const existingTeam = teams.find(t => t.team_name === teamName);
+   187	        
+   188	        if (existingTeam) {
+   189	            return existingTeam;
+   190	        }
+   191	        
+   192	        const newTeam = {
+   193	            id: 'team_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+   194	            team_name: teamName,
+   195	            created_at: Date.now()
+   196	        };
+   197	        
+   198	        teams.push(newTeam);
+   199	        saveToLocalStorage('disc_teams', teams);
+   200	        return newTeam;
+   201	    }
+   202	
+   203	    function saveMember(memberData) {
+   204	        const members = getAllMembers();
+   205	        const newMember = {
+   206	            ...memberData,
+   207	            id: 'member_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+   208	            created_at: Date.now()
+   209	        };
+   210	        
+   211	        members.push(newMember);
+   212	        saveToLocalStorage('disc_members', members);
+   213	        return newMember;
+   214	    }
+   215	
+   216	    // ============================================================================
+   217	    // 메인 앱 로직
+   218	    // ============================================================================
+   219	    let currentTeam = null;
+   220	    let currentMember = null;
+   221	    let currentPage = 0;
+   222	    let answers = [];
+   223	
+   224	    function showScreen(screenId) {
+   225	        document.querySelectorAll('.screen').forEach(screen => {
+   226	            screen.classList.add('hidden');
+   227	        });
+   228	        document.getElementById(screenId).classList.remove('hidden');
+   229	    }
+   230	
+   231	    function startTest() {
+   232	        const teamName = document.getElementById('teamName').value.trim();
+   233	        const memberName = document.getElementById('memberName').value.trim();
+   234	        
+   235	        if (!teamName || !memberName) {
+   236	            alert('팀 이름과 팀원 이름을 모두 입력해주세요.');
+   237	            return;
+   238	        }
+   239	        
+   240	        currentTeam = saveTeam(teamName);
+   241	        currentMember = { name: memberName, team_id: currentTeam.id };
+   242	        
+   243	        currentPage = 0;
+   244	        answers = questions.map((_, index) => ({ questionIndex: index, most: null, least: null }));
+   245	        
+   246	        showScreen('testScreen');
+   247	        renderPage();
+   248	    }
+   249	
+   250	    function renderPage() {
+   251	        const startIdx = currentPage * questionsPerPage;
+   252	        const endIdx = Math.min(startIdx + questionsPerPage, questions.length);
+   253	        const pageQuestions = questions.slice(startIdx, endIdx);
+   254	        
+   255	        const container = document.getElementById('questionContainer');
+   256	        container.innerHTML = '';
+   257	        
+   258	        pageQuestions.forEach((question, pageIdx) => {
+   259	            const questionIdx = startIdx + pageIdx;
+   260	            const questionDiv = document.createElement('div');
+   261	            questionDiv.className = 'mb-8';
+   262	            
+   263	            questionDiv.innerHTML = `
+   264	                <div class="bg-white rounded-2xl shadow-md p-5 mb-4">
+   265	                    <h3 class="font-bold text-lg mb-4 text-gray-800">문항 ${questionIdx + 1}</h3>
+   266	                    <p class="text-sm text-gray-600 mb-4">
+   267	                        <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-2">가장 비슷한 것 1개</span>
+   268	                        <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded text-xs">가장 다른 것 1개</span>
+   269	                        를 선택하세요
+   270	                    </p>
+   271	                    
+   272	                    <div class="space-y-3">
+   273	                        ${question.options.map((option, optIdx) => `
+   274	                            <div class="option-card rounded-xl p-4 cursor-pointer bg-gray-50 hover:bg-gray-100"
+   275	                                 data-question="${questionIdx}"
+   276	                                 data-type="${option.type}"
+   277	                                 data-option="${optIdx}">
+   278	                                <div class="flex items-center justify-between">
+   279	                                    <span class="text-gray-800">${option.text}</span>
+   280	                                    <div class="flex gap-2">
+   281	                                        <button class="most-btn w-8 h-8 rounded-full border-2 border-green-500 flex items-center justify-center text-xs"
+   282	                                                onclick="selectOption(event, ${questionIdx}, '${option.type}', 'most')">
+   283	                                            <span class="checkmark hidden">✓</span>
+   284	                                        </button>
+   285	                                        <button class="least-btn w-8 h-8 rounded-full border-2 border-red-500 flex items-center justify-center text-xs"
+   286	                                                onclick="selectOption(event, ${questionIdx}, '${option.type}', 'least')">
+   287	                                            <span class="checkmark hidden">✗</span>
+   288	                                        </button>
+   289	                                    </div>
+   290	                                </div>
+   291	                            </div>
+   292	                        `).join('')}
+   293	                    </div>
+   294	                </div>
+   295	            `;
+   296	            
+   297	            container.appendChild(questionDiv);
+   298	        });
+   299	        
+   300	        pageQuestions.forEach((question, pageIdx) => {
+   301	            const questionIdx = startIdx + pageIdx;
+   302	            const answer = answers[questionIdx];
+   303	            
+   304	            if (answer.most) {
+   305	                const mostCard = Array.from(document.querySelectorAll(`[data-question="${questionIdx}"]`))
+   306	                    .find(card => card.dataset.type === answer.most);
+   307	                if (mostCard) {
+   308	                    mostCard.classList.add('selected-most');
+   309	                    mostCard.querySelector('.most-btn .checkmark').classList.remove('hidden');
+   310	                }
+   311	            }
+   312	            
+   313	            if (answer.least) {
+   314	                const leastCard = Array.from(document.querySelectorAll(`[data-question="${questionIdx}"]`))
+   315	                    .find(card => card.dataset.type === answer.least);
+   316	                if (leastCard) {
+   317	                    leastCard.classList.add('selected-least');
+   318	                    leastCard.querySelector('.least-btn .checkmark').classList.remove('hidden');
+   319	                }
+   320	            }
+   321	        });
+   322	        
+   323	        document.getElementById('currentPage').textContent = currentPage + 1;
+   324	        const progress = ((currentPage + 1) / totalPages) * 100;
+   325	        document.getElementById('progressBar').style.width = progress + '%';
+   326	        
+   327	        document.getElementById('prevBtn').disabled = currentPage === 0;
+   328	        document.getElementById('nextBtn').textContent = 
+   329	            currentPage === totalPages - 1 ? '완료' : '다음';
+   330	    }
+   331	
+   332	    function selectOption(event, questionIdx, type, selection) {
+   333	        event.stopPropagation();
+   334	        
+   335	        const answer = answers[questionIdx];
+   336	        const cards = document.querySelectorAll(`[data-question="${questionIdx}"]`);
+   337	        
+   338	        if (selection === 'most' && answer.most === type) {
+   339	            answer.most = null;
+   340	            cards.forEach(card => {
+   341	                card.classList.remove('selected-most');
+   342	                card.querySelector('.most-btn .checkmark').classList.add('hidden');
+   343	            });
+   344	            return;
+   345	        }
+   346	        
+   347	        if (selection === 'least' && answer.least === type) {
+   348	            answer.least = null;
+   349	            cards.forEach(card => {
+   350	                card.classList.remove('selected-least');
+   351	                card.querySelector('.least-btn .checkmark').classList.add('hidden');
+   352	            });
+   353	            return;
+   354	        }
+   355	        
+   356	        if (selection === 'most' && answer.least === type) {
+   357	            alert('같은 항목을 가장 비슷한 것과 가장 다른 것으로 동시에 선택할 수 없습니다.');
+   358	            return;
+   359	        }
+   360	        if (selection === 'least' && answer.most === type) {
+   361	            alert('같은 항목을 가장 비슷한 것과 가장 다른 것으로 동시에 선택할 수 없습니다.');
+   362	            return;
+   363	        }
+   364	        
+   365	        if (selection === 'most') {
+   366	            cards.forEach(card => {
+   367	                card.classList.remove('selected-most');
+   368	                card.querySelector('.most-btn .checkmark').classList.add('hidden');
+   369	            });
+   370	            answer.most = type;
+   371	        } else {
+   372	            cards.forEach(card => {
+   373	                card.classList.remove('selected-least');
+   374	                card.querySelector('.least-btn .checkmark').classList.add('hidden');
+   375	            });
+   376	            answer.least = type;
+   377	        }
+   378	        
+   379	        const selectedCard = Array.from(cards).find(card => card.dataset.type === type);
+   380	        if (selection === 'most') {
+   381	            selectedCard.classList.add('selected-most');
+   382	            selectedCard.querySelector('.most-btn .checkmark').classList.remove('hidden');
+   383	        } else {
+   384	            selectedCard.classList.add('selected-least');
+   385	            selectedCard.querySelector('.least-btn .checkmark').classList.remove('hidden');
+   386	        }
+   387	    }
+   388	
+   389	    function prevPage() {
+   390	        if (currentPage > 0) {
+   391	            currentPage--;
+   392	            renderPage();
+   393	            window.scrollTo(0, 0);
+   394	        }
+   395	    }
+   396	
+   397	    function nextPage() {
+   398	        const startIdx = currentPage * questionsPerPage;
+   399	        const endIdx = Math.min(startIdx + questionsPerPage, questions.length);
+   400	        
+   401	        for (let i = startIdx; i < endIdx; i++) {
+   402	            if (!answers[i].most || !answers[i].least) {
+   403	                alert(`문항 ${i + 1}의 답변을 완료해주세요.`);
+   404	                return;
+   405	            }
+   406	        }
+   407	        
+   408	        if (currentPage < totalPages - 1) {
+   409	            currentPage++;
+   410	            renderPage();
+   411	            window.scrollTo(0, 0);
+   412	        } else {
+   413	            completeTest();
+   414	        }
+   415	    }
+   416	
+   417	    function completeTest() {
+   418	        const scores = calculateDISCScores(answers);
+   419	        const types = getDISCTypes(scores);
+   420	        const percentages = calculatePercentages(scores);
+   421	        
+   422	        const memberData = {
+   423	            team_id: currentTeam.id,
+   424	            member_name: currentMember.name,
+   425	            main_type: types.main,
+   426	            sub_type: types.sub,
+   427	            d_score: scores.D,
+   428	            i_score: scores.I,
+   429	            s_score: scores.S,
+   430	            c_score: scores.C,
+   431	            answers: JSON.stringify(answers)
+   432	        };
+   433	        
+   434	        const savedMember = saveMember(memberData);
+   435	        showResult(savedMember, scores, percentages, types);
+   436	    }
+   437	
+   438	    function showResult(member, scores, percentages, types) {
+   439	        document.getElementById('resultMemberName').textContent = member.member_name;
+   440	        
+   441	        const mainProfile = discProfiles[types.main];
+   442	        const subProfile = discProfiles[types.sub];
+   443	        
+   444	        document.getElementById('mainType').innerHTML = 
+   445	            `<span style="color: ${mainProfile.color}">메인: ${mainProfile.name}</span>`;
+   446	        document.getElementById('subType').textContent = 
+   447	            `보조: ${subProfile.name}`;
+   448	        
+   449	        document.getElementById('strengths').textContent = mainProfile.strengths;
+   450	        document.getElementById('weaknesses').textContent = mainProfile.weaknesses;
+   451	        
+   452	        const stressorsHtml = mainProfile.stressors
+   453	            .map(stressor => `<p class="mb-2">• ${stressor}</p>`)
+   454	            .join('');
+   455	        document.getElementById('stressors').innerHTML = stressorsHtml;
+   456	        
+   457	        const ctx = document.getElementById('resultChart').getContext('2d');
+   458	        new Chart(ctx, {
+   459	            type: 'doughnut',
+   460	            data: {
+   461	                labels: ['D (주도형)', 'I (사교형)', 'S (안정형)', 'C (신중형)'],
+   462	                datasets: [{
+   463	                    data: [percentages.D, percentages.I, percentages.S, percentages.C],
+   464	                    backgroundColor: ['#EF4444', '#EAB308', '#10B981', '#3B82F6'],
+   465	                    borderWidth: 2,
+   466	                    borderColor: '#fff'
+   467	                }]
+   468	            },
+   469	            options: {
+   470	                responsive: true,
+   471	                maintainAspectRatio: true,
+   472	                plugins: {
+   473	                    legend: {
+   474	                        position: 'bottom',
+   475	                        labels: {
+   476	                            padding: 15,
+   477	                            font: { size: 12 }
+   478	                        }
+   479	                    },
+   480	                    tooltip: {
+   481	                        callbacks: {
+   482	                            label: function(context) {
+   483	                                return context.label + ': ' + context.parsed + '%';
+   484	                            }
+   485	                        }
+   486	                    }
+   487	                }
+   488	            }
+   489	        });
+   490	        
+   491	        showScreen('resultScreen');
+   492	        window.scrollTo(0, 0);
+   493	    }
+   494	
+   495	    function goHome() {
+   496	        currentTeam = null;
+   497	        currentMember = null;
+   498	        currentPage = 0;
+   499	        answers = [];
+   500	        
+   501	        document.getElementById('teamName').value = '';
+   502	        document.getElementById('memberName').value = '';
+   503	        
+   504	        showScreen('homeScreen');
+   505	        window.scrollTo(0, 0);
+   506	    }
+   507	
+   508	    // 초기 화면 표시
+   509	    document.addEventListener('DOMContentLoaded', function() {
+   510	        showScreen('homeScreen');
+   511	    });
+   512	    </script>
+   513	</body>
+   514	</html>
